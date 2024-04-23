@@ -53,6 +53,23 @@ bool buzzerState = LOW; // Estado inicial do buzzer
 unsigned long buzzerTimer = 0; // Para guardar a última vez que o buzzer mudou de estado
 const unsigned long buzzerInterval = 1000; // Intervalo de tempo para ligar/desligar o buzzer
 
+struct Luminosidade
+{
+  int lumi;
+};
+
+Luminosidade Luminosidades[20];
+int contadorLumi = 0;
+
+int lumiMedia;
+int lumiMax;
+int lumiMin;
+
+int pwm = 0; // Valor inicial do PWM
+const long interval = 100; // Intervalo de atualização do PWM em milissegundos
+
+// -------------------------------------------------------------------------------------------------
+// Função setup
 void setup() 
 {
   // Configuração dos pinos PWM como saída
@@ -76,6 +93,8 @@ void setup()
   Serial.begin(9600);
 }
 
+// -------------------------------------------------------------------------------------------------
+// Função loop
 void loop() 
 {
 
@@ -84,24 +103,28 @@ void loop()
   debounceButton2();
   debounceButton3();
 
+    // Verificar caso o botao1 tenha sido apertado
   if (button1)
   {
     // logica
     button1 = false;
   }
 
+    // Verificar caso o botao2 tenha sido apertado
   if (button2)
   {
     // logica
     button2 = false;
   }
 
+    // Verificar caso o botao3 tenha sido apertado
   if (button3)
   {
     // logica
     button3 = false;
   }
 
+    // Caso tenha passado 1 segundo fazer a verificacao do sensor de temperatura
   if ((millis() - previousMillisLM35) > 1000)
   {
     funcLM35();
@@ -109,14 +132,15 @@ void loop()
   }
     
 
-  if (millis() - previousMillisLDR >= 500)
+    // Caso tenha passado 0,5 segundo fazer a verificacao do sensor de luminosidade
+  if ((millis() - previousMillisLDR) > 500)
   {
     funcLDR();
     previousMillisLDR = millis();
   }
     
-  
-  if (millis() - previousMillisPOT >= 400)
+  // Caso tenha passado 0,4 segundo fazer a verificacao do potenciometro
+  if ((millis() - previousMillisPOT) > 400)
   {
     funcPOT();
     previousMillisPOT = millis();
@@ -124,13 +148,15 @@ void loop()
     
 }
 
+// -------------------------------------------------------------------------------------------------
+// Função responsável pela logica do sensor de temperatura
 void funcLM35() 
 {
   // Ler temperatura do sensor 
   int tempAtual = lerTemperaturaTC(); //tinkercad
   //int tempAtual = lerTemperaturaAD(); //arduino
 
-  Serial.println(tempAtual);
+  //Serial.println(tempAtual);
   
   // Armazenar a leitura atual no array e atualizar o contadorTemp
   temperaturas[contadorTemp].temp = tempAtual;
@@ -155,23 +181,49 @@ void funcLM35()
   }
 
   // Finalizar cálculo da média
-  tempMedia = tempMedia / 20;
+  tempMedia /= 20;
 
   // Verifica se a temperatura atual é maior que o limite
   controlBuzzer(tempAtual);
 }
 
-void funcLDR()
+// -------------------------------------------------------------------------------------------------
+// Função responsável pela logica do sensor de luminosidade
+void funcLDR() 
 {
+  int lumiAtual = lerLuminosidade();  // Ler luminosidade do sensor
 
+  // Armazenar a leitura atual no array e atualizar o contadorLumi
+  Luminosidades[contadorLumi].lumi = lumiAtual;
+  contadorLumi = (contadorLumi + 1) % 20; // Contador circular de 0 a 19
+
+  lumiMedia = 0;
+  lumiMax = Luminosidades[0].lumi;
+  lumiMin = Luminosidades[0].lumi;
+
+  for (int i = 0; i < 20; i++) {
+    lumiMedia += Luminosidades[i].lumi;
+    if (Luminosidades[i].lumi > lumiMax) {
+      lumiMax = Luminosidades[i].lumi;
+    }
+    if (Luminosidades[i].lumi < lumiMin) {
+      lumiMin = Luminosidades[i].lumi;
+    }
+  }
+
+  lumiMedia /= 20;  // Calcula a média das leituras
+
+  controlLeds(lumiAtual);
 }
 
+// -------------------------------------------------------------------------------------------------
+// Função responsável pela logica do potenciometro
 void funcPOT()
 {
   // 
 }
 
-// ----------------------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 // Funções utilizadas para o sensor de temperatura
 
 // Função para ler a temperatura no Tinkercad
@@ -211,7 +263,47 @@ void controlBuzzer(int tempAtual)
   }
 }
 
+// -------------------------------------------------------------------------------------------------
+// Funções utilizadas para o sensor de luminosidade
 
+// Função para ler a luminosidade atual
+int lerLuminosidade() 
+{
+  // Substitua a função abaixo pelo método correto de leitura do sensor LDR no seu ambiente (Arduino, etc.)
+  return analogRead(LDR);  // Lê o valor do sensor no pino analógico A0
+}
+
+// Função para realizar o fade nos Leds baseados na luminosidade
+void controlLeds(int lumiAtual)
+{
+  // Verifica se a leitura atual da luminosidade é menor que 600
+  if (lumiAtual < 600) 
+  {
+      // Mapeia a luminosidade atual para um valor de PWM
+      // 'lumiMin' é a luminosidade mínima registrada que mapeia para o PWM máximo (255)
+      // '600' é o limite de luminosidade para começar a reduzir a intensidade do LED, mapeando para PWM mínimo (0)
+      // Assim, se a luminosidade está próxima ao mínimo, o LED está no seu brilho máximo (255).
+      // E à medida que a luminosidade aumenta, a intensidade do LED diminui, até que a luminosidade atinja 600.
+      pwm = map(lumiAtual, lumiMin, 600, 255, 0);
+  } 
+  else 
+  {
+      // Quando a luminosidade atual é igual ou maior que 600,
+      // desliga os LEDs definindo o PWM como 0.
+      // Isso é feito porque um ambiente já suficientemente iluminado não necessita de iluminação adicional.
+      pwm = 0; // Reseta o PWM quando a luminosidade é alta
+  }
+
+
+  // Aplica o PWM a todos os LEDs
+  analogWrite(pino1, pwm);
+  analogWrite(pino2, pwm);
+  analogWrite(pino3, pwm);
+  analogWrite(pino4, pwm);
+}
+
+// -------------------------------------------------------------------------------------------------
+// Funções para verificacao do debounce do botao
 void debounceButton1()
 {
   int reading = digitalRead(botao1);
