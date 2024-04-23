@@ -68,6 +68,18 @@ int lumiMin;
 int pwm = 0; // Valor inicial do PWM
 const long interval = 100; // Intervalo de atualização do PWM em milissegundos
 
+struct Potenciometro
+{
+  int pot;
+};
+
+Potenciometro Potencias[20];
+int contadorPot = 0;
+
+int potMedia;
+int potMax;
+int potMin;
+
 // -------------------------------------------------------------------------------------------------
 // Função setup
 void setup() 
@@ -220,7 +232,35 @@ void funcLDR()
 // Função responsável pela logica do potenciometro
 void funcPOT()
 {
-  // 
+  int potAtual = lerPotenciometro(); // Lê o valor atual do potenciômetro conectado à porta A2
+
+  // Armazena a leitura atual no array e incrementa o contador
+  Potencias[contadorPot].pot = potAtual;
+  contadorPot = (contadorPot + 1) % 20; // Isso fará o contador girar de 0 a 19
+
+  // Calcular média, máximo e mínimo
+  for (int i = 0; i < 20; ++i) 
+  {
+    int tempPot = Potencias[i].pot;
+    
+    potMedia += tempPot; // Somando para calcular média depois
+    
+    if (tempPot > potMax) 
+    {
+      potMax = tempPot; // Atualiza o máximo
+    }
+    if (tempPot < potMin) 
+    {
+      potMin = tempPot; // Atualiza o mínimo
+    }
+  }
+
+  // Finalizar cálculo da média
+  potMedia /= 20;
+
+  // Controle do servo motor com a média atualizada
+  controlServo(potAtual);
+
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -265,12 +305,10 @@ void controlBuzzer(int tempAtual)
 
 // -------------------------------------------------------------------------------------------------
 // Funções utilizadas para o sensor de luminosidade
-
 // Função para ler a luminosidade atual
 int lerLuminosidade() 
 {
-  // Substitua a função abaixo pelo método correto de leitura do sensor LDR no seu ambiente (Arduino, etc.)
-  return analogRead(LDR);  // Lê o valor do sensor no pino analógico A0
+  return analogRead(LDR);  // Lê o valor do sensor no pino analógico do LDR
 }
 
 // Função para realizar o fade nos Leds baseados na luminosidade
@@ -300,6 +338,21 @@ void controlLeds(int lumiAtual)
   analogWrite(pino2, pwm);
   analogWrite(pino3, pwm);
   analogWrite(pino4, pwm);
+}
+
+// -------------------------------------------------------------------------------------------------
+// Funções utilizadas para o potenciometro
+// Função para ler a potencia atual
+int lerPotenciometro() 
+{
+  return analogRead(potenciometro);  // Lê o valor do sensor no pino analógico do potenciometro
+}
+
+// Função que irá controlar o servo
+void controlServo(int atualPot) 
+{
+  int valorPWM = map(atualPot, 0, 1023, 0, 180); // Mapeia a média para um valor de PWM adequado
+  analogWrite(servomotor, valorPWM); // Configura a posição do servo usando PWM
 }
 
 // -------------------------------------------------------------------------------------------------
