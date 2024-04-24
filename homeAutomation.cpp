@@ -1,3 +1,6 @@
+#include <Servo.h>  // Inclui a biblioteca do Servo
+
+
 // Declaração das portas dos pinos como constantes
 const int pino1 = 3;   // Porta PWM
 const int pino2 = 5;   // Porta PWM
@@ -8,6 +11,9 @@ const int botao2 = 4;  // Porta digital
 const int botao3 = 7;  // Porta digital
 const int buzzer = 10; // Porta PWM
 const int servomotor = 11; // Porta PWM
+
+Servo meuServo;    // Cria um objeto servo para controlar o micro servo
+int lastServoPosition = 0; // Variável global para armazenar a última posição do servo
 
 // Portas analógicas
 const int LDR = 0;  // Sensor LDR na porta analógica A0
@@ -80,6 +86,54 @@ int potMedia;
 int potMax;
 int potMin;
 
+
+enum EstadoInterface
+{
+  EstadoInicial,
+  SensorTemp,
+  SensorLumi,
+  MotorBuzzer
+};
+
+
+EstadoInterface State = EstadoInicial;
+
+enum EstadoTemperatura
+{
+  EstadoInicialTemp,
+  TempMed,
+  TempMaxMin,
+  VoltarTemp,
+};
+
+
+EstadoTemperatura StateTemp = EstadoInicialTemp;
+
+enum EstadoLuminosidade
+{
+  EstadoInicialLumi,
+  LumiMed,
+  LumiMaxMin,
+  VoltarLumi,
+};
+
+
+EstadoLuminosidade StateLumi = EstadoInicialLumi;
+
+
+enum EstadoMotorBuzzer
+{
+  EstadoInicialMotor,
+  MotPos,
+  Buzzer,
+  VoltarMotBuzz,
+};
+
+
+EstadoMotorBuzzer StateMotBuzz = EstadoInicialMotor;
+
+bool mensagemMostrada = false;
+
 // -------------------------------------------------------------------------------------------------
 // Função setup
 void setup() 
@@ -90,7 +144,7 @@ void setup()
   pinMode(pino3, OUTPUT);
   pinMode(pino4, OUTPUT);
   pinMode(buzzer, OUTPUT);
-  pinMode(servomotor, OUTPUT);
+  meuServo.attach(servomotor);
 
   // Configuração dos botões como entrada
   pinMode(botao1, INPUT);
@@ -115,49 +169,319 @@ void loop()
   debounceButton2();
   debounceButton3();
 
-    // Verificar caso o botao1 tenha sido apertado
-  if (button1)
+  switch (State)
   {
-    // logica
-    button1 = false;
-  }
 
-    // Verificar caso o botao2 tenha sido apertado
-  if (button2)
-  {
-    // logica
-    button2 = false;
-  }
+   
+      
+    case EstadoInicial:
+    {
+      
+      if (!mensagemMostrada)
+      {
+        Serial.println("- Escolha a opção desejada\n");
+        Serial.println("  * (1) Sensor de temperatura\n");
+        Serial.println("  * (2) Sensor de luminosidade\n");
+        Serial.println("  * (3) Motor e Buzzer\n");
+        mensagemMostrada = true;
+      }
 
-    // Verificar caso o botao3 tenha sido apertado
-  if (button3)
-  {
-    // logica
-    button3 = false;
-  }
+      // Caso tenha passado 1 segundo fazer a verificacao do sensor de temperatura
+      if ((millis() - previousMillisLM35) > 1000)
+      {
+        funcLM35();
+        previousMillisLM35 = millis();
+      } 
 
-    // Caso tenha passado 1 segundo fazer a verificacao do sensor de temperatura
-  if ((millis() - previousMillisLM35) > 1000)
-  {
-    funcLM35();
-    previousMillisLM35 = millis();
-  }
-    
+      // Caso tenha passado 0,5 segundo fazer a verificacao do sensor de luminosidade
+      if ((millis() - previousMillisLDR) > 500)
+      {
+        funcLDR();
+        previousMillisLDR = millis();
+      }
+        
+      // Caso tenha passado 0,4 segundo fazer a verificacao do potenciometro
+      if ((millis() - previousMillisPOT) > 400)
+      {
+        funcPOT();
+        previousMillisPOT = millis();
+      }
 
-    // Caso tenha passado 0,5 segundo fazer a verificacao do sensor de luminosidade
-  if ((millis() - previousMillisLDR) > 500)
-  {
-    funcLDR();
-    previousMillisLDR = millis();
-  }
-    
-  // Caso tenha passado 0,4 segundo fazer a verificacao do potenciometro
-  if ((millis() - previousMillisPOT) > 400)
-  {
-    funcPOT();
-    previousMillisPOT = millis();
-  }
-    
+      // Verificar caso o botao1 tenha sido apertado
+      if (button1)
+      {
+        mensagemMostrada = false;
+        State = SensorTemp;
+        button1 = false;
+      }
+
+        // Verificar caso o botao2 tenha sido apertado
+      if (button2)
+      {
+        State = SensorLumi;
+        mensagemMostrada = false;
+        button2 = false;
+      }
+
+        // Verificar caso o botao3 tenha sido apertado
+      if (button3)
+      {
+        State = MotorBuzzer;
+        mensagemMostrada = false;
+        button3 = false;
+        StateMotBuzz = EstadoInicialMotor;
+      }
+
+    }
+    break;
+
+    case SensorTemp:
+    {
+      switch(StateTemp)
+      {
+        case EstadoInicialTemp:
+        {
+          if (!mensagemMostrada)
+          {
+            Serial.println("- Escolha a opção desejada\n");
+            Serial.println("  * (1) Temperatura media\n");
+            Serial.println("  * (2) Temperatura maxima ou minima\n");
+            Serial.println("  * (3) Voltar\n");
+            mensagemMostrada = true;
+          }
+
+          // Verificar caso o botao1 tenha sido apertado
+          if (button1)
+          {
+            StateTemp = TempMed;
+            mensagemMostrada = false;
+            button1 = false;
+          }
+
+            // Verificar caso o botao2 tenha sido apertado
+          if (button2)
+          {
+            StateTemp = TempMaxMin;
+            mensagemMostrada = false;
+            button2 = false;
+          }
+
+            // Verificar caso o botao3 tenha sido apertado
+          if (button3)
+          {
+            StateTemp = VoltarTemp;
+            mensagemMostrada = false;
+            button3 = false;
+          }
+        }
+        break;
+        
+        case TempMed:
+        {
+          Serial.println("\n");
+          Serial.println("\----------------------");
+          Serial.println("A temperatura media foi: ");
+          Serial.println(tempMedia);
+          Serial.println("\----------------------");
+          Serial.println("\n");
+          StateTemp = EstadoInicialTemp;
+          mensagemMostrada = false;
+        }
+        break;
+
+        case TempMaxMin:
+        {
+          Serial.println("\n");
+          Serial.println("\----------------------");
+          Serial.println("A temperatura Maxima foi: ");
+          Serial.println(tempMax);
+          Serial.println("A temperatura Minima foi: ");
+          Serial.println(tempMin);
+          Serial.println("\----------------------");
+          Serial.println("\n");
+          StateTemp = EstadoInicialTemp;
+          mensagemMostrada = false;
+        }
+        break;
+
+        case VoltarTemp:
+        {
+          State = EstadoInicial;
+          StateTemp = EstadoInicialTemp;
+          mensagemMostrada = false;
+        }
+        break;
+      }
+    }
+    break;
+
+    case SensorLumi:
+    {
+      switch(StateLumi)
+      {
+        case EstadoInicialLumi:
+        {
+          if (!mensagemMostrada)
+          {
+            Serial.println("- Escolha a opção desejada\n");
+            Serial.println("  * (1) Luminosidade media\n");
+            Serial.println("  * (2) Luminosidade maxima ou minima\n");
+            Serial.println("  * (3) Voltar\n");
+            mensagemMostrada = true;
+          }
+
+          // Verificar caso o botao1 tenha sido apertado
+          if (button1)
+          {
+            StateLumi = LumiMed;
+            mensagemMostrada = false;
+            button1 = false;
+          }
+
+            // Verificar caso o botao2 tenha sido apertado
+          if (button2)
+          {
+            StateLumi = LumiMaxMin;
+            mensagemMostrada = false;
+            button2 = false;
+          }
+
+            // Verificar caso o botao3 tenha sido apertado
+          if (button3)
+          {
+            StateLumi = VoltarLumi;
+            mensagemMostrada = false;
+            button3 = false;
+          }
+        }
+        break;
+        
+        case LumiMed:
+        {
+          Serial.println("\n");
+          Serial.println("\----------------------");
+          Serial.println("A luminosidade media foi: ");
+          Serial.println(lumiMedia);
+          Serial.println("\----------------------");
+          Serial.println("\n");
+          StateLumi = EstadoInicialLumi;
+          mensagemMostrada = false;
+        }
+        break;
+
+        case LumiMaxMin:
+        {
+          Serial.println("\n");
+          Serial.println("\----------------------");
+          Serial.println("A luminosidade Maxima foi: ");
+          Serial.println(lumiMax);
+          Serial.println("A luminosidade Minima foi: ");
+          Serial.println(lumiMin);
+          Serial.println("\----------------------");
+          Serial.println("\n");
+          StateLumi = EstadoInicialLumi;
+          mensagemMostrada = false;
+        }
+        break;
+
+        case VoltarTemp:
+        {
+          State = EstadoInicial;
+          StateLumi = EstadoInicialLumi;
+          mensagemMostrada = false;
+        }
+        break;
+      }
+    }
+    break;
+
+    case MotorBuzzer:
+    {
+      
+      switch(StateMotBuzz)
+      {
+        Serial.println("oi");
+        case EstadoInicialMotor:
+        {
+          if (!mensagemMostrada)
+          {
+            Serial.println("- Escolha a opção desejada\n");
+            Serial.println("  * (1)  Mostrar a posição do motor\n");
+            Serial.println("  * (2)  Ligar/desligar o buzzer\n");
+            Serial.println("  * (3) Voltar\n");
+            mensagemMostrada = true;
+          }
+
+          if (button1)
+          {
+            StateMotBuzz = MotPos;
+            mensagemMostrada = false;
+            button1 = false;
+          }
+
+          if (button2)
+          {
+            StateMotBuzz = Buzzer;
+            mensagemMostrada = false;
+            button2 = false;
+          }
+
+          if (button3)
+          {
+            StateMotBuzz = VoltarMotBuzz;
+            mensagemMostrada = false;
+            button3 = false;
+          }
+        }
+        break;
+
+        case MotPos:
+        {
+          Serial.println("\n");
+          Serial.println("----------------------");
+          Serial.println("A posicao do motor eh: ");
+          Serial.println(lastServoPosition);
+          Serial.println("----------------------");
+          Serial.println("\n");
+          StateMotBuzz = EstadoInicialMotor;
+          mensagemMostrada = false; 
+        }
+        break;
+
+        case Buzzer:
+        {
+          if (buzzerState == LOW)
+          {
+            analogWrite(buzzer, 1); // Aciona o buzzer
+            buzzerState = HIGH;
+          }
+          else
+          {
+            analogWrite(buzzer, 0); // Desliga o buzzer
+            buzzerState = LOW;
+          }
+          StateMotBuzz = EstadoInicialMotor;
+          mensagemMostrada = false; 
+        }
+        break;
+
+        case VoltarMotBuzz:
+        {
+          State = EstadoInicial;
+          StateMotBuzz = EstadoInicialMotor;
+          mensagemMostrada = false;
+        }
+        break;
+
+        default:
+          break;  
+      }
+    }
+    break;
+
+    default:
+      break;
+  } 
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -351,8 +675,9 @@ int lerPotenciometro()
 // Função que irá controlar o servo
 void controlServo(int atualPot) 
 {
-  int valorPWM = map(atualPot, 0, 1023, 0, 180); // Mapeia a média para um valor de PWM adequado
-  analogWrite(servomotor, valorPWM); // Configura a posição do servo usando PWM
+  int anguloServo = map(atualPot, 0, 1023, 0, 180); // Mapeia o valor atual do potenciômetro para um ângulo de 0 a 180 graus
+  meuServo.write(anguloServo); // Configura a posição do servo
+  lastServoPosition = anguloServo; // Atualiza a última posição conhecida do servo
 }
 
 // -------------------------------------------------------------------------------------------------
